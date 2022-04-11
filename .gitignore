@@ -1,0 +1,6 @@
+test.py
+*.txt
+scheme.eddx
+__pycache__
+.idea
+*.zip

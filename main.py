@@ -19,7 +19,7 @@ admins = {
     '460205942': 'Matvey'
 }
 
-send = True
+send = 0
 
 if send:
     for n in admins:
@@ -183,7 +183,9 @@ def place_list_handler(message):
     next_step = place_list_handler
     if t == 'Добавить место':
         markup = markup_final
-        rep = place_add_info
+        bot.send_message(uid, place_add_info)
+        bot.send_message(uid, "Пример:")
+        rep = place_add_example
         to_log = 'Add'
         next_step = place_add_handler
     elif t == 'Удалить место':
@@ -200,7 +202,11 @@ def place_list_handler(message):
     elif t == 'Добавить картинку':
         rep = 'Отправьте изображение и ID'
         to_log = 'AddPic'
-        bot.register_next_step_handler(message, image_add_handler)
+        next_step = image_add_handler
+    elif t == 'Удалить картинку':
+        rep = 'Введите ID'
+        to_log = 'DeletePic'
+        next_step = image_delete_handler
     elif t == 'Назад':
         markup = markup_adm
         rep = 'Возвращаемся в панель администратора'
@@ -245,9 +251,16 @@ def place_add_handler(message):
             nm = dat["name"]
             desc = dat["description"]
             dat["date_start"] = datetime.strptime(dat["date_start"], "%d.%m.%Y %H:%M")
+            f_dt = dat["date_start"].strftime("%d.%m %H:%M")
             if "date_end" in dat:
                 dat["date_end"] = datetime.strptime(dat["date_end"], "%d.%m.%Y %H:%M")
-            dt = dat["date_start"].strftime("%d.%m %H:%M")
+                if dat["date_start"].day == dat["date_end"].day:
+                    t_dt = dat["date_end"].strftime("%H:%M")
+                else:
+                    t_dt = dat["date_end"].strftime("%d.%m %H:%M")
+                dt = "с {} до {}".format(f_dt, t_dt)
+            else:
+                dt = f_dt
             adr = dat["address"]
             theme_info = theme_checker(dat["theme"], True)
             theme = theme_info["name"]
@@ -322,7 +335,7 @@ def place_edit_handler(message):
     do_log(message.from_user.id, 'Place edit')
     markup = markup_final
     next_step = place_edit_handler
-    inp = message.text.split('\n', 2)
+    inp = message.text.lower().split('\n', 2)
     uid = message.from_user.id
     if len(inp) == 3:
         rep = 'Неправильный ID'
@@ -335,11 +348,17 @@ def place_edit_handler(message):
                 if inp[1] in ['id', 'image']:
                     rep = 'Нельзя изменить ID или изображение'
                 elif hasattr(place, inp[1]):
-                    add_user_data(uid, "EditPlace", [pid, inp[1], inp[2]])
-                    setattr(place, inp[1], inp[2])
-                    bot.send_message(uid, place_info(place, pid))
-                    rep = 'Подтвердить?'
-                    next_step = place_edit_confirm
+                    try:
+                        if inp[1] in ['date_start', 'date_end']:
+                            inp[2] = datetime.strptime(inp[2], "%d.%m.%Y %H:%M")
+                        add_user_data(uid, "EditPlace", [pid, inp[1], inp[2]])
+                        setattr(place, inp[1], inp[2])
+                        place_info(place, pid, bot, uid)
+                        rep = 'Подтвердить?'
+                        next_step = place_edit_confirm
+                    except ValueError as e:
+                        rep = "Неправильный формат даты. Попробуйте снова"
+                        print(e)
                 else:
                     rep = 'Аттрибут не найден'
             ses.close()
@@ -379,31 +398,72 @@ def place_edit_confirm(message):
 
 def image_add_handler(message):
     ses = Session()
-    rep = "Место не найдено"
+    uid = message.from_user.id
+    rep = "Место не найдено. Попробуйте снова"
+    markup = markup_final
+    next_step = image_add_handler
     if message.content_type == "photo":
         try:
             fid = message.photo[-1].file_id
             inp = message.caption
+            do_log(uid, "ImageAdd", inp)
             pl = ses.query(Places).where(Places.id == int(inp)).first()
             if pl:
                 pl.image = fid
                 ses.commit()
+                place_info(pl, pl.id, bot, uid)
                 rep = "Изображение успешно добавлено"
-            else:
-                rep = "ID не найдено"
+                markup = markup_places_list
+                next_step = place_list_handler
         except TypeError as e:
             rep = "Необходимо указать ID. Попробуйте снова"
             do_log(message.from_user.id, 'Error', str(e))
         except Exception as e:
             rep = "Ошибка:" + str(e)
-        ses.close()
+            do_log(message.from_user.id, 'Error', str(e))
     elif message.text == "Назад":
+        do_log(uid, "ImageAdd", "Back")
         rep = "Отмена добавления изображения"
-    markup = markup_places_list
-    bot.register_next_step_handler(message, place_list_handler)
-    bot.send_message(message.from_user.id, rep)
-    bot.send_message(message.from_user.id, "Возвращаемся в список мест")
-    bot.send_message(message.from_user.id, places_list_for_admins(), reply_markup=markup)
+        markup = markup_places_list
+        next_step = place_list_handler
+    else:
+        do_log(uid, "ImageAdd", "WrongInput")
+        rep = "Необходимо отправить изображение с подписью. Попробуйте снова"
+    ses.close()
+    bot.register_next_step_handler(message, next_step)
+    bot.send_message(uid, rep)
+    if next_step == place_list_handler:
+        bot.send_message(uid, "Возвращаемся в список мест")
+        bot.send_message(uid, places_list_for_admins(), reply_markup=markup)
+
+
+def image_delete_handler(message):
+    ses = Session()
+    t = message.text
+    uid = message.from_user.id
+    do_log(uid, "ImageDelete", t)
+    rep = "Место не найдено. Попробуйте снова"
+    markup = markup_final
+    next_step = image_delete_handler
+    if t.isdigit():
+        place = ses.query(Places).where(Places.id == int(t)).first()
+        if place:
+            place.image = None
+            ses.commit()
+            bot.send_message(uid, 'Изображение успешно удалено')
+            rep = place_info(place, place.id)
+            markup = markup_places_list
+            next_step = place_list_handler
+    elif message.text == "Назад":
+        rep = "Отмена удаления изображения"
+        markup = markup_places_list
+        next_step = place_list_handler
+    ses.close()
+    bot.register_next_step_handler(message, next_step)
+    bot.send_message(uid, rep)
+    if next_step == place_list_handler:
+        bot.send_message(uid, "Возвращаемся в список мест")
+        bot.send_message(uid, places_list_for_admins(), reply_markup=markup)
 
 
 def admin_add_remove_handler(message, add=True):
@@ -491,11 +551,7 @@ def main_handler(message):
         ses.close()
         if place:
             rep = places_list_for_admins()
-            p_info = place_info(place, int(message.text))
-            if place.image:
-                bot.send_photo(uid, place.image, caption=p_info, reply_markup=markup)
-            else:
-                bot.send_message(uid, p_info, reply_markup=markup)
+            place_info(place, int(message.text), bot, uid)
         else:
             rep = "Место с таким ID не найдено"
     bot.send_message(uid, rep, reply_markup=markup)
@@ -606,13 +662,7 @@ def show_place_info(call):
     places = get_user_data(uid, "places", [])
     if len(places) > p_num:
         place = places[p_num]
-        rep = place_info(place, p_num + 1)
-        if place.image:
-            bot.send_photo(uid, place.image, caption=rep, reply_markup=markup)
-        else:
-            bot.send_message(uid, rep, reply_markup=markup)
-        if place.address:
-            bot.send_location(uid, place.lat, place.lon)
+        place_info(place, p_num + 1, bot, uid)
         bot.send_message(uid, contact_info.format(place.name))
         bot.answer_callback_query(call.id)
         do_log(uid, 'Place', place.name)

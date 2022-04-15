@@ -1,5 +1,6 @@
 from models import *
 from strings import *
+from markups import markup_final
 
 
 def places_list_for_admins():
@@ -36,12 +37,28 @@ def theme_checker(par, make_new=False):
     return theme
 
 
-def place_info(place, place_number_in_list=0):
-    rep = place_info_template
+def place_info(place, place_number_in_list=0, bot=None, uid=None, markup=markup_final):
     nm = place.name
     adr = place.address if place.address else 'Нет'
-    dt = place.date_start.strftime("%d.%m %H:%M")
+    f_dt = place.date_start.strftime("%d.%m %H:%M")
+    if place.date_end:
+        if place.date_start.day == place.date_end.day:
+            t_dt = place.date_end.strftime("%H:%M")
+        else:
+            t_dt = place.date_end.strftime("%d.%m %H:%M")
+        dt = "с {} до {}".format(f_dt, t_dt)
+    else:
+        dt = f_dt
     theme = theme_checker(place.theme)["name"]
     price = f"от {place.price_min} до {place.price_max}" if place.price_max else str(place.price_min)
     desc = place.description
-    return rep.format(str(place_number_in_list), nm, adr, dt, theme, price, desc)
+    rep = place_info_template.format(str(place_number_in_list), nm, adr, dt, theme, price, desc)
+    if bot and uid:
+        if place.image:
+            bot.send_photo(uid, place.image, caption=rep, reply_markup=markup)
+        else:
+            bot.send_message(uid, rep, reply_markup=markup)
+        if place.lat and place.lon:
+            bot.send_location(uid, place.lat, place.lon)
+        return True
+    return rep

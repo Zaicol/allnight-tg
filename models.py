@@ -39,7 +39,6 @@ class Places(Base):
     id = Column('id', Integer(), primary_key=True)
     name = Column('name', String(200))
     description = Column('description', String(800))
-    adm_dist = Column('adm_dist', ForeignKey("adm_dist.id"))
     price_min = Column('price_min', Integer())
     price_max = Column('price_max', Integer())
     date_start = Column('date_start', DateTime())
@@ -49,6 +48,7 @@ class Places(Base):
     address = Column('address', String(200))
     lat = Column('lat', Float())
     lon = Column('lon', Float())
+    priority = Column('priority', Integer(), default=0)
 
 
 Session = sessionmaker(bind=engine)

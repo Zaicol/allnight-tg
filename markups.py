@@ -30,8 +30,8 @@ def make_inline(p):
     return kb
 
 
-markup_main = make_kb([['Поиск', 'Инфо']])
-markup_main_adm = make_kb([['Поиск', 'Инфо'], 'Панель'])
+markup_main = make_kb([['Подобрать ивент', 'Инфо']])
+markup_main_adm = make_kb([['Подобрать ивент', 'Инфо'], 'Панель'])
 
 
 _ses = Session()

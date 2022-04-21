@@ -126,12 +126,6 @@ def admin_panel(message):
             rep = 'Ваш ID:\n' + str(message.from_user.id)
         elif t == 'Тест':
             rep = 'Кнопка для тестовых штук'
-            ses = Session()
-            s = ses.query(Places).first()
-            print(getattr(s, "adm_dist"))
-            setattr(s, "adm_dist", 5)
-            ses.commit()
-            ses.close()
         elif t == 'Админы':
             ses = Session()
             s = ses.query(Users).where(Users.admin == 1).all()
@@ -203,6 +197,7 @@ def place_list_handler(message):
         rep = 'Отправьте изображение и ID'
         to_log = 'AddPic'
         next_step = image_add_handler
+        markup = markup_final
     elif t == 'Удалить картинку':
         rep = 'Введите ID'
         to_log = 'DeletePic'
@@ -240,7 +235,7 @@ def place_add_handler(message):
     inp = message.text.split('\n', 9)
     uid = message.from_user.id
     params = ['name', 'date_start', 'date_end', 'address', 'lat',
-              'lon', 'price_min', 'price_max', 'theme', 'description']
+              'lon', 'price_min', 'price_max', 'theme', 'priority', 'description']
     dat = {}
     if len(inp) == len(params):
         markup = markup_yes_no
@@ -536,8 +531,9 @@ def main_handler(message):
         rep = "Приветствую, человек"
     elif message.text == "Инфо":
         bot.send_message(message.from_user.id, start_message)
-        rep = places_list_for_admins()
-    elif message.text in ["Поиск", "Любой"]:
+        bot.send_message(message.from_user.id, places_list_for_admins())
+        rep = place_info_main_page
+    elif message.text in ["Поиск", "Подобрать ивент", "Любой"]:
         rep = "Выберите жанр"
         markup = markup_genre
         bot.register_next_step_handler(message, choose_genre)
@@ -630,14 +626,12 @@ def choose_date(c):
         found_places = ses.query(Places)
         if chosen_genre and chosen_genre != 'Любой':
             found_places = found_places.where(Places.theme == chosen_genre)
-        found_places = found_places.all()
+        found_places = found_places .all()
         ses.close()
 
-        def tform(p):
-            return str(p.date_start.time()).rsplit(':', 1)[0]
-
         fp = found_places
-        found_places = sorted(list(filter(lambda p: p.date_start.date() == ch_time, fp)), key=lambda p: p.date_start)
+        found_places = sorted(list(filter(lambda p: p.date_start.date() == ch_time, fp)),
+                              key=lambda p: (-p.priority, p.date_start))
         places_list = []
         markup_num = make_inline(found_places)
         for i in range(len(found_places)):
@@ -646,7 +640,9 @@ def choose_date(c):
                 p_price = f"от {x.price_min} до {x.price_max}"
             else:
                 p_price = x.price_min
-            places_list.append(the_place.format(str(i+1), x.name, tform(x), p_price, x.address))
+            p_date = x.date_start.strftime("%H:%M")
+            p_theme = theme_checker(x.theme)["name"]
+            places_list.append(the_place.format(str(i+1), x.name, x.address, p_date, p_theme, p_price))
         add_user_data(uid, "places", found_places)
         rep = text_found.format(chosen_genre, ch_time, sklonenie_mesta(len(places_list)))
         rep += '\n'.join(places_list)

@@ -7,8 +7,8 @@ def places_list_for_admins():
     ses = Session()
     s = ses.query(Places).all()
     ses.close()
-    plist = [str(x.id) + '\t' + x.name for x in s]
-    rep = "Список мест\nID\tНазвание\n"
+    plist = [str(x.id) + '. ' + x.name for x in s]
+    rep = "Список мест\nID. Название\n"
     rep += '\n'.join(plist)
     return rep
 
